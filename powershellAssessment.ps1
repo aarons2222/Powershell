@@ -1,18 +1,25 @@
-﻿$ProgressPreference = 'SilentlyContinue'
-#LOGIN TO AZURE - DISPLAYS LOGIN DIALOG
+﻿#LOGIN TO AZURE - DISPLAYS LOGIN DIALOG
 #Select-AzureRmProfile  -Path “C:\Users\Aaron\Documents\login\azureprofile.json”
 Login-AzureRmAccount
 
+#### VARIABLES
+##############
 
+#hides green (GET) progress bars 
+$ProgressPreference = 'SilentlyContinue'  
 
 ## ERROR VARIALE CREATED FOR ERROR HANDLING 
  $continue = $null
-#STORES RESOURCE GROUP NAME - ADDS A RANDOM 2 DIGITS (NUMBER/LETTER) COMBINATION
+
+ #STORES RESOURCE GROUP NAME - ADDS A RANDOM 2 DIGITS (NUMBER/LETTER) COMBINATION
 #https://technet.microsoft.com/en-us/library/ff730929.aspx
 $resGroup = "rg" + -join ((48..57) + (97..100) | Get-Random -Count 2 | % {[char]$_})
 
 #CHECK TO SEE IF RESOURCE GROUP EXISTS IF DOESNT EXIST A NEW RESOURCE GROUP IS CREATED
 $resGrpChk = Get-AzureRmResourceGroup -ResourceGroupName $resGroup -ev notPresent -erroraction 'silentlycontinue'
+
+#Service plan name
+$sPlan = "SPlan1"
 
 if (!$resGrpChk)
 {  
@@ -25,15 +32,16 @@ else
     #IF RESOURCE GROUP ALREADY EXISTS 2 RANDOMLY GENERATED DIDGETS ARE APPENDED TO THE $resGroup variable
    Write-Host 'The Resource Group' $resGroup 'already exists!!' -fore white -back red
     Write-Host ' '
-   $resGroup = $resGroup + -join ((48..57) + (97..100) | Get-Random -Count 2 | % {[char]$_})
+   $resGroup = $resGroup + $changename
     New-AzureRmResourceGroup -Name $resGroup -Location "West Europe"
      Write-Host ' '  
      Write-Host 'Resource Group' $resGroup 'created' -fore white -back green
 }
+Write-host "Creating new app plan"
+New-AzureRmAppServicePlan -ResourceGroupName $resGroup -Name $sPlan -Tier "Standard" -Location "West Europe" -NumberofWorkers 1 -WorkerSize small 
+Set-AzureRmAppServicePlan -ResourceGroupName $resGroup -Name $sPlan 
 
-################### 
 # DEPLOY WEB APPS #
-###################
 
 #WEB APP 1
 $WebApp1 = "FirstApp" + $resGroup
@@ -51,16 +59,14 @@ $appChk = Get-AzureRmWebApp -Name $WebApp2
 Write-Host 'Creating first webApp' -fore white -back DarkBlue
 if (!$appChk)
 { 
-
-New-AzureRmWebApp -ResourceGroupName $resGroup  -Name $WebApp1 -Location $WebAppLocation1 
+New-AzureRmWebApp -ResourceGroupName $resGroup  -Name $WebApp1 -Location $WebAppLocation1 -AppServicePlan $sPlan
 }
-
 else
 {
 #if webApp still exists append another random numbers on the end.  
 Write-Host "webApp name already exists - creating new"
  $WebApp1 = $WebApp1 + (Get-Random -minimum 1 -maximum 9)
-New-AzureRmWebApp -ResourceGroupName $resGroup  -Name $WebApp1 -Location $WebAppLocation1 -erroraction 'silentlycontinue'
+New-AzureRmWebApp -ResourceGroupName $resGroup  -Name $WebApp1 -Location $WebAppLocation1 -erroraction 'silentlycontinue' -AppServicePlan $sPlan
 Write-Host $WebApp1 ' CREATED' -fore white -back GREEN
 }
 
@@ -69,7 +75,7 @@ Write-Host 'Creating second webApp' -fore white -back DarkBlue
 if (!$appChk)
 { 
 Write-Host "Doesnt exist - Creating"
-New-AzureRmWebApp -ResourceGroupName $resGroup  -Name $WebApp2 -Location $WebAppLocation2 
+New-AzureRmWebApp -ResourceGroupName $resGroup  -Name $WebApp2 -Location $WebAppLocation2 -AppServicePlan $sPlan
 }
 
 else
@@ -77,20 +83,21 @@ else
 #if webApp still exists append another random numbers on the end. 
 Write-Host "WebApp name already exists - Creating new"
  $WebApp2 = $WebApp2 + (Get-Random -minimum 1 -maximum 9)
-New-AzureRmWebApp -ResourceGroupName $resGroup  -Name $WebApp2 -Location $WebAppLocation2 -erroraction 'silentlycontinue'
+New-AzureRmWebApp -ResourceGroupName $resGroup  -Name $WebApp2 -Location $WebAppLocation2 -erroraction 'silentlycontinue' -AppServicePlan $sPlan 
 Write-Host $WebApp2 ' CREATED' -fore white -back GREEN
 }
-
 
 #GET HOSTNAMES AND LAUNCHES THE URLS IN INTERNET EXPLORER
 # GET HOST NAME FOR WEB APP
 
 $host1 = Get-AzureRmWebApp -Name $WebApp1
 $host2 = Get-AzureRmWebApp -Name $WebApp2
+Get-AzureRmWebApp 
+
 Write-Host ' '
 $link1 = $host1.DefaultHostName
 $link2 = $host2.DefaultHostName
-Write-Host 'Launching ' $WebApp1  -fore white -back green
+Write-Host 'Launching ' $WebApp1 '&' $webApp2  -fore white -back green
 $Browser=new-object -com internetexplorer.application
 $Browser.navigate2($link1)
 $Browser.navigate2($link2, 0x1000 )#launch second webapp in new tab - solution found on StackOverflow
@@ -108,7 +115,7 @@ Write-Host "Number of WebApps/Sites deployed in" $resGroup "Resource Group: " $a
 #DISPLAY COUNT OF DEPLOYED APPS UNDER CURRENT PLAN
 $appsInPlan = 0
 Write-Host "Getting number of apps in service plan...`n" 
-Start-Sleep -s 15
+Start-Sleep -s 20
 Get-AzureRmAppServicePlan | Select-Object -ExpandProperty NumberOfSites | ForEach-Object {$appsInPlan++ }
 Write-Host "Number of apps deployed under current plan:"  $appsInPlan 
 Write-Host ""
@@ -120,17 +127,14 @@ Start-Sleep -s 10
 ##################################################
 
 # Gets SQL capabilies of chosen georgaphic location
-
 Write-Host ""
 $server1Location = "East US"
 $server2Location = "UK South"
+$server3Location = "West Europe"
 
 Write-Host "SQL capabilities of "$server1Location 
 Get-AzureRMSqlCapability -Location $server1Location 
 Write-Host ""
-Write-Host ""
-Write-Host "SQL capabilities of "$server2Location 
-Get-AzureRMSqlCapability -Location $server2Location 
 
 ###### SQL SERVER LOGIN CREDENTIALS
 $admin = "aaron"
@@ -141,8 +145,9 @@ $creds = New-Object -TypeName System.Management.Automation.PSCredential -Argumen
 ### SQL server names with resource group name appeneded
 $server1 = "sqlserver1" + $resGroup
 $server2 = "sqlserver2" + $resGroup
+$server3 = "sqlserver3" + $resGroup
 
- ##Server
+ #Create server 1(Server A)
 <#check to see if server exists - It exists, $continue is created and passed to
 if statement to append two random characters to name#>
 Write-Host "Creating First SQL Server"
@@ -163,10 +168,9 @@ if ($continue)
 }else{
 Write-Host $server1 ' Created'
 }
-  
   Start-Sleep -s 2
 
- ##Server2 
+ #Create server 2(Server B)
  <#check to see if server exists - It exists, $continue is created and passed to
 if statement to append two random characters to name#>
  Write-Host "Creating Second SQL Server"
@@ -188,25 +192,22 @@ if ($continue)
 Write-Host $server2 ' Created'
 }
 
-
-<#firewall rules
-https://github.com/Microsoft/azure-docs/blob/master/articles/sql-database/sql-database-configure-firewall-settings-powershell.md
-#>
+#firewall rules
+#https://github.com/Microsoft/azure-docs/blob/master/articles/sql-database/sql-database-configure-firewall-settings-powershell.md
 
 # Adds Firewall rule to Server1
 New-AzureRmSqlServerFirewallRule -ResourceGroupName $resGroup `
- -ServerName $server1 -FirewallRuleName "server1Rule" -StartIpAddress '10.10.1.1' -EndIpAddress '10.10.1.99' 
+ -ServerName $server1 -FirewallRuleName "server1Rule" -StartIpAddress '0.0.0.0' -EndIpAddress '255.255.255.255' 
 Write-Host "New Firewall rule added to" $server1  -fore white -back green `
 
 # Adds Firewall rule to Server2
 New-AzureRmSqlServerFirewallRule -ResourceGroupName $resGroup `
- -ServerName $server2 -FirewallRuleName "server2Rule" -StartIpAddress '10.11.1.1' -EndIpAddress '10.11.1.70' 
+ -ServerName $server2 -FirewallRuleName "server2Rule" -StartIpAddress '0.0.0.0' -EndIpAddress '255.255.255.255' 
   Write-Host "New Firewall rule added to" $server2  -fore white -back green ` 
 
 Start-Sleep -s 2
 
 ###### DEPLOY SQL DATABASE TO SERVER A (Server1)
-
 # Create SQL Database 
 $Db = "db1" 
 $DbBackup = "db1backup" 
@@ -217,7 +218,6 @@ Write-Host "Creating SQL database in" $server1
 
 New-AzureRmSqlDatabase -ResourceGroupName $resGroup -ServerName $server1 -DatabaseName $Db -Edition $Edition -RequestedServiceObjectiveName $Tier
 
-
 #Copy db1 from server1 accross to server2
 #https://docs.microsoft.com/en-us/azure/sql-database/sql-database-copy-powershell
 
@@ -225,120 +225,134 @@ Write-Host "Copying" $Db "from" $server1 "over to" $server2
 New-AzureRmSqlDatabaseCopy -ResourceGroupName $resGroup -ServerName $server1 -DatabaseName $Db -CopyServerName $server2 -CopyDatabaseName $DbBackup
 
 Write-Host "done!"
-
-Start-Sleep -s 20
-
+#Start-Sleep -s 20
 
 ####################################
 ########## 2:1 CRITERIA ############
 ####################################
+#storage container
+$cont = "dbbackup"
+##Creates storage account
+$storage = "blobstores" + $resGroup
 
-##Creates BLOB storage account
-
-
-
-
-
-
-
-
+#new storage account
+Write-Host "Creating storage account"
+New-AzureRmStorageAccount -ResourceGroupName $resGroup -AccountName $storage -Location "West Europe" -Type "Standard_LRS"
 
 
+##create storage container
+Write-Host "Creating storage container"
+Set-AzureRmCurrentStorageAccount -ResourceGroupName $resGroup -StorageAccountName $storage
 
+Get-AzureRmContext
 
-<#
-$storageName = "storage" + $resGroup;
- 
-Write-Host  "- Creating storage account" -fore white -back darkblue
-  
-New-AzureStorageContainer -Name "blob" -Permission Off
+New-AzureStorageContainer -Name $cont -Permission Off
 
- 
-
-
-
-##backup SQL DB to blob storage as .bacpac
-
-$subscriptionId = "YOUR AZURE SUBSCRIPTION ID"
-
-Login-AzureRmAccount
-Set-AzureRmContext -SubscriptionId $subscriptionId
+#gets storage key
+$storekey=(Get-AzureRmStorageAccountKey -Name $storage -ResourceGroupName $resGroup)[0].Value
 
 # Database to export
-
-$ServerName =  $server1  
-$serverAdmin = $admin  
-$securePassword = ConvertTo-SecureString -String $password -AsPlainText -Force
+$ServerName = $server1
+$serverAdmin = "aaron"
+$serverPassword = "Password_1234" 
+$securePassword = ConvertTo-SecureString -String $serverPassword -AsPlainText -Force
 $creds = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $serverAdmin, $securePassword
 
-
-
-
-
-
-
- Get-AzureStorageKey –StorageAccountName $storageName
-
- Write-Host  $myStoreKey 
-
-
-
 # Generate a unique filename for the BACPAC
-$bacpacFilename = $Db + (Get-Date).ToString("yyyyMMddHHmm") + ".bacpac"
+$bacpacFilename = $Db + ".bacpac"
 
 # Storage account info for the BACPAC
-$BaseStorageUri = "https://STORAGE-NAME.blob.core.windows.net/BLOB-CONTAINER-NAME/"
+$BaseStorageUri = "https://"+$storage+".blob.core.windows.net/dbbackup/"
 $BacpacUri = $BaseStorageUri + $bacpacFilename
 $StorageKeytype = "StorageAccessKey"
-$StorageKey = "YOUR STORAGE KEY"
+$StorageKey = $storekey
 
-$exportRequest = New-AzureRmSqlDatabaseExport -ResourceGroupName $ResourceGroupName -ServerName $ServerName `
-   -DatabaseName $DatabaseName -StorageKeytype $StorageKeytype -StorageKey $StorageKey -StorageUri $BacpacUri `
+$exportRequest = New-AzureRmSqlDatabaseExport -ResourceGroupName $resGroup -ServerName $ServerName `
+   -DatabaseName $Db -StorageKeytype $StorageKeytype -StorageKey $StorageKey -StorageUri $BacpacUri `
    -AdministratorLogin $creds.UserName -AdministratorLoginPassword $creds.Password
 $exportRequest
 
 # Check status of the export
+Write-Host "Status of backup"
 Get-AzureRmSqlDatabaseImportExportStatus -OperationStatusLink $exportRequest.OperationStatusLink
 
+######Create server 3(Server C)
+<#check to see if server exists - It exists, $continue is created and passed to
+if statement to append two random characters to name#>
 
-  
-
+Write-Host "Creating 3rd SQL Server"
  
-"Starting database backup" 
- 
-$StorageContext = New-AzureStorageContext -StorageAccountName $storageAccountName -StorageAccountKey $storageKey 
- 
+  $sqlServer = New-AzureRmSqlServer -ServerName $server3 -SqlAdministratorCredentials $creds -Location $server3Location -ResourceGroupName $resGroup -ServerVersion "12.0" -ErrorVariable continue -ErrorAction SilentlyContinue
 
+if ($continue)
+{
+ do {
+     $server3 = $server3 + -join ((48..57) + (97..100) | Get-Random -Count 1 | % {[char]$_})
+   $sqlServer = New-AzureRmSqlServer -ServerName $server3 `
+ -SqlAdministratorCredentials $creds -Location $server3Location `
+ -ResourceGroupName $resGroup -ServerVersion "12.0" -ErrorVariable continue -ErrorAction SilentlyContinue
+  }
+  until(!$continue)
 
+ Write-Host 'exists creating new' $server3 'Created'
+}else{
+Write-Host $server3 ' Created'
+}
+  Start-Sleep -s 2
 
- #Create a variable to store the Storage Account name
-$StorageAccount = 'savtechstoreeastus'
+  # Adds Firewall rule to Server3
+New-AzureRmSqlServerFirewallRule -ResourceGroupName $resGroup `
+ -ServerName $server3 -FirewallRuleName "server1Rule" -StartIpAddress '0.0.0.0' -EndIpAddress '255.255.255.255' 
+Write-Host "New Firewall rule added to" $server3  -fore white -back green `
 
-#Save the storage account key
-$StorageKey = (Get-AzureStorageKey `
--StorageAccountName $StorageAccount).Primary
+##import .bacpac from storage to Server3
 
-#Create a context to the storage account
-$storageaccount1 = new-azurestoragecontext `
--storageaccountname $StorageAccount -storageaccountkey $StorageKey
+##checks for existance of .bacpac file before continuing with import 
+do{
+$blobExist = Get-AzureStorageBlob -Container $cont | Select-Object -ExpandProperty Name
+  sleep -s 5
+  Write-Host "waiting for .bacpac"
+}while(!$blobExist)
 
+$StorageUri = "http://$storage.blob.core.windows.net/dbbackup/db1.bacpac"
 
+$importRequest = New-AzureRmSqlDatabaseImport -ResourceGroupName $resGroup -ServerName $server3 -DatabaseName $Db -StorageKeytype $StorageKeyType -StorageKey $StorageKey -StorageUri $StorageUri -AdministratorLogin $creds.UserName -AdministratorLoginPassword $creds.Password -Edition Standard -ServiceObjectiveName S0 -DatabaseMaxSizeBytes 50000
+$importRequest 
 
+Write-Host "Status of restore"
+Get-AzureRmSqlDatabaseImportExportStatus -OperationStatusLink $importRequest.OperationStatusLink 
 
+#https://blobstoresrg1b.blob.core.windows.net/dbbackup/
 
- Get-AzureStorageAccountKey -ResourceGroupName $resGroup –StorageAccountName $storageName
+##Backup webapps to blob
 
- Write-Host  $myStoreKey 
+#new storage
 
+    # This returns an array of keys for your storage account. Be sure to select the appropriate key. Here we select the first key as a default.
+    $storageAccountKey = Get-AzureRmStorageAccountKey -ResourceGroupName $resGroup -Name $storage
+    $context = New-AzureStorageContext -StorageAccountName $storage -StorageAccountKey $storageAccountKey[0].Value
 
+    $sasUrl = New-AzureStorageContainerSASToken -Name $cont -Permission rwdl -Context $context -ExpiryTime (Get-Date).AddMonths(1) -FullUri
 
+    $backup = New-AzureRmWebAppBackup -ResourceGroupName $resGroup -Name $webApp1 -StorageAccountUrl $sasUrl
+    $backup = New-AzureRmWebAppBackup -ResourceGroupName $resGroup -Name $webApp2 -StorageAccountUrl $sasUrl
+      
+      Write-host "Creating Notification Hub Namespace"
 
-###### FIRST CRITERIA ############
+      $namespace = "namespace" + $resGroup
 
+      #Create new notification hub to resource group.
 
+New-AzureRmNotificationHubsNamespace -ResourceGroup $resGroup -Location "West US" -Namespace $namespace
+sleep -s 15
+Write-host "Creating Notification Hub"
+#Get-AzureRmNotificationHubsNamespace -ResourceGroup $resGroup -Location "West US" -Namespace $namespace
+New-AzureRmNotificationHub -Namespace $namespace -ResourceGroup $resGroup -InputFile "C:\Configurations\json.json"
 
+<#
+function deleterg
+{
 
-<#DELETES ALL RESOURCE GROUPS
 
 $currentSub = Get-AzureSubscription -Current
 
@@ -351,4 +365,9 @@ foreach($rg in $resourceGroups)
 {
     Remove-AzureRmResourceGroup -Name $rg.ResourceGroupName -Force -Verbose
 }
+}
+
+deleterg
 #>
+
+
