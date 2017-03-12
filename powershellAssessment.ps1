@@ -326,8 +326,6 @@ Get-AzureRmSqlDatabaseImportExportStatus -OperationStatusLink $importRequest.Ope
 
 ##Backup webapps to blob
 
-#new storage
-
     # This returns an array of keys for your storage account. Be sure to select the appropriate key. Here we select the first key as a default.
     $storageAccountKey = Get-AzureRmStorageAccountKey -ResourceGroupName $resGroup -Name $storage
     $context = New-AzureStorageContext -StorageAccountName $storage -StorageAccountKey $storageAccountKey[0].Value
@@ -349,6 +347,17 @@ Write-host "Creating Notification Hub"
 #Get-AzureRmNotificationHubsNamespace -ResourceGroup $resGroup -Location "West US" -Namespace $namespace
 New-AzureRmNotificationHub -Namespace $namespace -ResourceGroup $resGroup -InputFile "C:\Configurations\json.json"
 
+
+
+
+
+
+
+
+
+
+
+
 <#
 function deleterg
 {
@@ -369,5 +378,4 @@ foreach($rg in $resourceGroups)
 
 deleterg
 #>
-
 
